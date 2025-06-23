@@ -33,7 +33,7 @@ if (!$dbconn) {
 } else {
     // Si la conexión es exitosa, puedes realizar consultas a la base de datos, 
     // NOTA: El return 'echo' es opcional y debe permanecer comentado! a menos que sea para pruebas    
-    echo json_encode(array('result' => true, 'order' => null, 'message' => 'Conexion exitosa.!'));
+    //echo json_encode(array('result' => true, 'order' => null, 'message' => 'Conexion exitosa.!'));
 }
 
 // Métodos de comunicación con el front
@@ -131,8 +131,12 @@ if ($method == "POST") {
 }
 
 if ($method == "GET") {
+    $petitions = "";
+    if(isset($_GET['petitions'])){
+      $petitions = $_GET['petitions'];
+    }
     
-    if(isset($_GET['cerrarSesion'])){
+    if($petitions == 'cerrarSesion'){
         // Destruir todas las variables de sesión
         $_SESSION = array();
         
@@ -149,5 +153,19 @@ if ($method == "GET") {
         session_destroy();
         echo json_encode(array('result' => true, 'order' => null, 'message' => 'Cambios realizados con exito.!'));
     }
-        
+
+    if($petitions == 'getquejas'){
+        $type = $_GET['type'];
+        $status = $_GET['status'];
+        $sql = "select * from quejas";
+        if($type == "xxx"){
+            $sql = "select * from quejas";
+        }
+        echo json_encode(pg_array_sqlconector($sql));
+    }
+    
+    if($petitions == 'tipos'){
+        $sql = "select tipo_queja from quejas";
+        echo json_encode(pg_array_sqlconector($sql));
+    }
 }
