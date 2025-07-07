@@ -11,30 +11,7 @@ header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-date_default_timezone_set("UTC");
-
-define('PGSQL_VERSION', '14.0'); // Define la versión de PostgreSQL que estás utilizando
-define('HOST','localhost');
-define('PORT', '5432');
-define('DBNAME', 'postgres'); // Reemplaza con el nombre de tu base de datos
-define('USER','postgres');     // Reemplaza con tu usuario de PostgreSQL
-define('PASSWORD', 'a10882990'); // Reemplaza con tu contraseña de PostgreSQL
-
-// Cadena de conexión
-$conn_string = "host=".HOST." port=".PORT." dbname=".DBNAME." user=".USER." password=".PASSWORD."";
-
-// Intentar la conexión
-$dbconn = pg_connect($conn_string);
-
-// Verificar si la conexión fue exitosa
-if (!$dbconn) {
-    echo json_encode(array('result' => false, 'order' => null, 'message' => 'Error conexion.!','error' => pg_last_error()));
-    die();
-} else {
-    // Si la conexión es exitosa, puedes realizar consultas a la base de datos, 
-    // NOTA: El return 'echo' es opcional y debe permanecer comentado! a menos que sea para pruebas    
-    //echo json_encode(array('result' => true, 'order' => null, 'message' => 'Conexion exitosa.!'));
-}
+require_once 'connect.php';
 
 // Métodos de comunicación con el front
 
@@ -42,87 +19,135 @@ if ($method == "OPTIONS") {
     die();
 }
 
-function getPgPDOConnection() {
-    static $pdo = null; // Usamos 'static' para mantener la conexión abierta y reutilizarla
-    if ($pdo === null) {
-        $dsn = "pgsql:host=".HOST.";port=".PORT.";dbname=".DBNAME;
-        try {
-            $pdo = new PDO($dsn, USER, PASSWORD, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, // Lanza excepciones para errores
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC // Por defecto, devuelve arrays asociativos
-            ]);
-            // Para asegurar UTF-8 si tu base de datos no lo fuerza por defecto
-            // $pdo->exec("SET NAMES 'UTF8'"); // Esto es más común en MySQL. PostgreSQL maneja UTF8 en DSN.
-        } catch (PDOException $e) {
-            // Manejo de errores más robusto: podrías loggear el error en un archivo
-            // en lugar de mostrarlo directamente al usuario en producción.
-            die("Failed to connect to Data: " . $e->getMessage());
-        }
-    }
-    return $pdo;
-}
-
-function pg_sqlconector($consulta) {
-    $pdo = getPgPDOConnection();
-    try {
-        // Para SELECT, INSERT, UPDATE, DELETE
-        $resultado = $pdo->query($consulta);
-        return $resultado; // Devuelve el objeto PDOStatement
-    } catch (PDOException $e) {
-        // Puedes loggear el error para depuración
-        die("Error in query: " . $e->getMessage());
-    }
-}
-
-function pg_row_sqlconector($consulta) {
-    $row = array();
-    try {
-        $pdo = getPgPDOConnection();
-        $stmt = $pdo->query($consulta);
-        // fetch() con PDO::FETCH_ASSOC (establecido en getPgPDOConnection)
-        // obtendrá la fila como un array asociativo.
-        $row = $stmt->fetch();
-    } catch (PDOException $e) {
-        // En tu original, manejabas el error y salías. Aquí, lanzamos.
-        // Si no quieres que detenga la ejecución, puedes return [] o loggear.
-        echo "Refresh page, Failed to connect or query: " . $e->getMessage();
-        exit(); // O return []; para manejar el error de otra manera.
-    }
-    return $row ? $row : []; // Asegura que siempre devuelve un array (vacío si no hay resultados)
-}
-
-function pg_array_sqlconector($consulta) {
-    $obj = array();
-    try {
-        $pdo = getPgPDOConnection();
-        $stmt = $pdo->query($consulta);
-        // fetchAll() con PDO::FETCH_ASSOC (establecido en getPgPDOConnection)
-        // obtendrá todas las filas como un array de arrays asociativos.
-        $obj = $stmt->fetchAll();
-    } catch (PDOException $e) {
-        // Manejo de errores
-        die("Error fetching all rows: " . $e->getMessage());
-    }
-    return $obj;
-}
-
 if ($method == "POST") {
     try {
         $jsonData = file_get_contents('php://input');
         $data = json_decode($jsonData, true);
 
-        if (isset($data['example'])) {
-            $obj = array('result' => false, 'order' => null);
+        if (isset($data['alertas_cumplimiento'])) {
+            $obj = array('message' => null, 'alerta' => array());
 
-            $monto = $data['monto'];
-            $moneda = $data['moneda'];
+            $id_tipo_alerta = $data['id_tipo_alerta'];
+            $id_adjudicatario = $data['id_adjudicatario'];
+            $id_puesto = $data['id_puesto'];
+            $descripcion_alerta = $data['descripcion_alerta'];
+            $generada_por = $data['generada_por'];
             
-            if (isset($order['orderId'])) {
-                $obj['result'] = true;
-                $obj['order'] = $order['orderId'];
+            if (isset($id_tipo_alerta) && isset($id_adjudicatario)) {
+                $sql = "INSERT INTO alertas_cumplimiento (id_tipo_alerta, id_adjudicatorio, id_puesto, descripcion_alerta, generada_por) 
+                        VALUES ($id_tipo_alerta, $id_adjudicatario, $id_puesto, '$descripcion_alerta', '$generada_por')";
+                $result = pg_sqlconector($sql);
+                if ($result) {
+                    $obj['message'] = 'Alerta registrada exitosamente';
+                    $obj['alerta'] = array(
+                        'id_alerta' => getPgPDOConnection()->lastInsertId(), // Obtiene el ID de la última inserción
+                        'id_tipo_alerta' => $id_tipo_alerta,
+                        'id_adjudicatorio' => $id_adjudicatario,
+                        'id_puesto' => $id_puesto,
+                        'descripcion_alerta' => $descripcion_alerta,
+                        'fecha_generacion' => date('Y-m-d H:i:s'),
+                        'estado_alerta' => 'pendiente',
+                    );
+                } else {
+                    $obj['message'] = 'Error al insertar la alerta de cumplimiento.';
+                }
             }
             echo json_encode($obj);
         }
+
+        if (isset($data['seguimiento_alertas'])) {
+            $obj = array('message' => null, 'alerta' => array());
+
+            $id_alerta = $data['id_alerta'];
+            $tipo_accion = $data['tipo_accion'];
+            $descripcion_accion = $data['descripcion_accion'];
+            $resultado_accion = $data['resultado_accion'];
+            $realizado_por = $data['realizado_por'];
+            
+            if (isset($id_alerta) && isset($tipo_accion)) {
+                $sql = "INSERT INTO seguimiento_alertas (id_alerta, tipo_accion, descripcion_accion, resultado_accion, realizado_por) 
+                        VALUES ($id_alerta, '$tipo_accion', '$descripcion_accion', '$resultado_accion', '$realizado_por')";
+                $result = pg_sqlconector($sql);
+                if ($result) {
+                    $obj['message'] = 'Acción de seguimiento registrada exitosamente';
+                    $obj['seguimiento'] = array(
+                        'id_seguimiento' => getPgPDOConnection()->lastInsertId(), // Obtiene el ID de la última inserción
+                        'id_alerta' => $id_alerta,
+                        'tipo_accion' => $tipo_accion,
+                        'descripcion_accion' => $descripcion_accion,
+                        'resultado_accion' => $resultado_accion,
+                        'fecha_accion' => date('Y-m-d H:i:s'),
+                        'realizado_por' => $realizado_por,
+                    );
+                } else {
+                    $obj['message'] = 'Error al insertar el seguimiento_alertas.';
+                }
+            }
+            echo json_encode($obj);
+        }
+
+        if (isset($data['update_alertas_cumplimiento'])) {
+            $obj = array('message' => null, 'alerta' => array());
+
+            $id_alerta = $data['id_alerta'];
+            $estado_alerta = $data['estado_alerta'];
+            
+            if (isset($id_alerta)) {
+                $accion = "";
+                if($estado_alerta == 'Resuelta' || $estado_alerta == 'Escalada a Infraccion'){
+                    $accion = ", fecha_resolucion_escalada = '".date('Y-m-d H:i:s')."'";
+                }
+
+                $sql = "UPDATE alertas_cumplimiento 
+                        SET estado_alerta = '$estado_alerta' {$accion} 
+                        WHERE id_alerta = $id_alerta";
+
+                $result = pg_sqlconector($sql);
+                if ($result) {
+                    $obj['message'] = 'Estado de alerta actualizado exitosamente';
+                    $obj['alerta'] = array(
+                        'id_alerta' => $id_alerta,
+                        'estado_alerta' => $estado_alerta,
+                        'fecha_resolucion_escalada' => date('Y-m-d H:i:s'),
+                    );
+                } else {
+                    $obj['message'] = 'Error al actualizar la alerta de cumplimiento.';
+                }
+            }
+            echo json_encode($obj);
+        }
+
+        if (isset($data['escalar_a_infraccion'])) {
+            $obj = array('message' => null, 'alerta' => array());
+
+            $id_alerta = $data['id_alerta'];
+            $id_adjudicatario = pg_row_sqlconector("SELECT id_adjudicatorio FROM alertas_cumplimiento WHERE id_alerta = $id_alerta")['id_adjudicatorio'];
+            $articulo_violado = $data['articulo_violado'];
+            $descripcion_infraccion = $data['descripcion_infraccion'];
+            $id_tipo_infraccion = $data['id_tipo_infraccion'];
+            $evidencia_url = $data['evidencia_url'];
+            $observaciones_fiscal = $data['observaciones_fiscal'];
+            $registrada_por_usuario = $data['registrada_por_usuario'];
+
+            if (isset($id_alerta)) {
+                $sql = "INSERT INTO infracciones (id_adjudicatorio, articulo_violado, descripcion_infraccion, id_tipo_infraccion, evidencia_url, observaciones_fiscal, registrada_por_usuario) 
+                        VALUES ($id_adjudicatario, '$articulo_violado', '$descripcion_infraccion', $id_tipo_infraccion, '$evidencia_url', '$observaciones_fiscal', '$registrada_por_usuario')";
+                $result = pg_sqlconector($sql);
+                if ($result) {
+                    $obj['message'] = 'Estado de alerta actualizado exitosamente';
+                    $obj['infraccion_creada'] = array(
+                        'id_infraccion' => getPgPDOConnection()->lastInsertId(), // Obtiene el ID de la última inserción
+                        'id_alerta' => $id_alerta,
+                        'id_adjudicatorio' => $id_adjudicatario,
+                        'articulo_violado' => $articulo_violado,
+                        'descripcion_infraccion' => $descripcion_infraccion
+                    );
+                } else {
+                    $obj['message'] = 'Error al actualizar la alerta de cumplimiento.';
+                }
+            }
+            echo json_encode($obj);
+        }        
 
     } catch (Exception $e) {
         $response = array('Error' => $e->getMessage());
@@ -168,4 +193,79 @@ if ($method == "GET") {
         $sql = "select tipo_queja from quejas";
         echo json_encode(pg_array_sqlconector($sql));
     }
+
+    if($petitions == 'alertas_cumplimiento'){
+        $obj = array();
+        $sql = "select * from alertas_cumplimiento";
+        $alertas_cumplimiento = pg_array_sqlconector($sql);
+
+        foreach ($alertas_cumplimiento as $alerta) {
+            $obj[] = array(
+                'id' => $alerta['id_alerta'],
+                'tipo_alerta' => array(
+                    'id_tipo_alerta' => $alerta['id_tipo_alerta'],
+                    'nombre' => pg_row_sqlconector("select nombre from cat_tipos_alerta where id_tipo_alerta = ".$alerta['id_tipo_alerta'])['nombre']
+                ),
+                'adjudicatorio' => array(
+                    'id_adjudicatorio' => $alerta['id_adjudicatorio'], 
+                    'nombre' => pg_row_sqlconector("select razon_social_nombre as nombre from adjudicatorios where id_adjudicatorio = ".$alerta['id_adjudicatorio'])['nombre'],
+                    'numero_documento'=> pg_row_sqlconector("select numero_documento from adjudicatorios where id_adjudicatorio = ".$alerta['id_adjudicatorio'])['numero_documento']
+                ),
+                'puesto'=> array(
+                    'id_puesto' => $alerta['id_puesto'],
+                    'nombre' => pg_row_sqlconector("select codigo_puesto from puestos_locales where id_puesto = ".$alerta['id_puesto'])['codigo_puesto']
+                ),                
+                'fecha_generacion' => $alerta['fecha_generacion'],
+                'descripcion_alerta' => $alerta['descripcion_alerta'],
+                'estado_alerta' => $alerta['estado_alerta'],
+            );
+        }
+        echo json_encode($obj);
+    }
+
+    if($petitions == 'alertas_cumplimiento' && isset($_GET['id_alerta'])){
+        $id_alerta = $_GET['id_alerta'];
+        $sql = "select * from alertas_cumplimiento where id_alerta = $id_alerta";
+        $obj = array();
+        $alerta = pg_row_sqlconector($sql);
+        if ($alerta) {
+            $obj[] = array(
+                'id' => $alerta['id_alerta'],
+                'tipo_alerta' => array(
+                    'id_tipo_alerta' => $alerta['id_tipo_alerta'],
+                    'nombre' => pg_row_sqlconector("select nombre from cat_tipos_alerta where id_tipo_alerta = ".$alerta['id_tipo_alerta'])['nombre'],
+                    'descripcion' => pg_row_sqlconector("select descripcion from cat_tipos_alerta where id_tipo_alerta = ".$alerta['id_tipo_alerta'])['descripcion']
+                ),
+                'pagos' => array(
+                    'escalamiento_automatico' => true,
+                    'dias_para_escalar' => 15
+                ),
+                'adjudicatorio' => array(
+                    'id_adjudicatorio' => $alerta['id_adjudicatorio'], 
+                    'nombre' => pg_row_sqlconector("select razon_social_nombre as nombre from adjudicatorios where id_adjudicatorio = ".$alerta['id_adjudicatorio'])['nombre'],
+                    'numero_documento'=> pg_row_sqlconector("select numero_documento from adjudicatorios where id_adjudicatorio = ".$alerta['id_adjudicatorio'])['numero_documento'],
+                    'telefono' => pg_row_sqlconector("select telefono from adjudicatorios where id_adjudicatorio = ".$alerta['id_adjudicatorio'])['telefono'],
+                    'email' => pg_row_sqlconector("select correo_electronico from adjudicatorios where id_adjudicatorio = ".$alerta['id_adjudicatorio'])['correo_electronico']
+                ),
+                'puesto'=> array(
+                    'id_puesto' => $alerta['id_puesto'],
+                    'nombre' => pg_row_sqlconector("select codigo_puesto from puestos_locales where id_puesto = ".$alerta['id_puesto'])['codigo_puesto'],
+                    'ubicacion_detalle' => pg_row_sqlconector("select ubicacion_detalle from puestos_locales where id_puesto = ".$alerta['id_puesto'])['ubicacion_detalle']                    
+                ),                
+                'fecha_generacion' => $alerta['fecha_generacion'],
+                'descripcion_alerta' => $alerta['descripcion_alerta'],
+                'estado_alerta' => $alerta['estado_alerta'],
+                'historial_seguimiento' => array(
+                    'seguimiento' => pg_array_sqlconector("select * from seguimiento_alertas where id_alerta = $id_alerta")
+                )
+            );
+        } else {
+            $obj = array('result' => false, 'error' => '404 Not Found');
+        }
+
+        echo json_encode($obj);
+    }    
+    
 }
+
+?>
