@@ -24,6 +24,101 @@ if ($method == "POST") {
         $jsonData = file_get_contents('php://input');
         $data = json_decode($jsonData, true);
 
+        if(isset($data['addTipoAlerta'])){
+            $obj = array('message' => null);
+            $nombre = $data['data']['nombre'];
+            $descripcion = $data['data']['descripcion'];
+            $auto = $data['data']['auto'];
+            $dias = $data['data']['dias'];
+
+            //INSERT INTO products (product_id, name, price) VALUES (101, 'Laptop', 1200.00)
+            //ON CONFLICT (product_id) DO UPDATE SET name = EXCLUDED.name, price = EXCLUDED.price;
+
+            $query = "INSERT INTO cat_tipos_alerta(nombre_tipo_alerta, descripcion, escalamiento_automatico, dias_para_escalar)
+            values('$nombre', '$descripcion', '$auto', $dias) ON CONFLICT (nombre_tipo_alerta) DO UPDATE SET descripcion = EXCLUDED.descripcion, escalamiento_automatico= EXCLUDED.escalamiento_automatico, dias_para_escalar= EXCLUDED.dias_para_escalar";
+
+            //error_log($query, 3,"C:/xampp/htdocs/SERAMER-PLATFORM/var/log/error.log"); 
+            $result = pg_sqlconector($query);
+
+            if($result){
+                $obj['message'] = "Tipo de Alerta Creada con Exito...";
+            }
+            else{
+                $obj['message'] = "error!";
+            }
+
+            echo json_encode($obj);
+        }
+
+        if(isset($data['addAdjudicatarios'])){
+            $obj = array('message' => null);
+
+            $tipo_documento = $data['data']['tipoDocumento'];
+            $numero_documento = $data['data']['numeroDocumento'];
+            $razon_social_nombre= $data['data']['nombreRazonSocial'];
+            $apellido= $data['data']['apellido'];
+            $telefono= $data['data']['telefono'];
+            $correo_electronico= $data['data']['correo'];
+            $direccion_fiscal= $data['data']['direccion'];
+            $solvencia_financiera = $data['data']['solvenciaFinanciera'];
+            $es_persona_juridica = $data['data']['esPersonaJuridica'];
+            $nombre_representante_legal= $data['data']['nombreRepresentanteLegal']; 
+            $fecha_registro = $data['data']['fechaRegistro'];
+            $estado_activo = $data['data']['activo'];
+
+            $query = "INSERT INTO adjudicatarios(
+                tipo_documento,
+                numero_documento,
+                razon_social_nombre,
+                apellido,
+                telefono,
+                correo_electronico,
+                direccion_fiscal,
+                solvencia_financiera,
+                es_persona_juridica,
+                nombre_representante_legal,
+                fecha_registro,
+                estado_activo
+                )
+                values(
+                '$tipo_documento',
+                '$numero_documento',
+                '$razon_social_nombre',
+                '$apellido',
+                '$telefono',
+                '$correo_electronico',
+                '$direccion_fiscal',
+                '$solvencia_financiera',
+                '$es_persona_juridica',
+                '$nombre_representante_legal',
+                '$fecha_registro',
+                '$estado_activo'                
+                ) ON CONFLICT (numero_documento) DO UPDATE SET 
+                razon_social_nombre = EXCLUDED.razon_social_nombre,
+                apellido =EXCLUDED.apellido,
+                telefono =EXCLUDED.telefono,
+                correo_electronico= EXCLUDED.correo_electronico,
+                direccion_fiscal=EXCLUDED.direccion_fiscal,
+                solvencia_financiera=EXCLUDED.solvencia_financiera,
+                es_persona_juridica=EXCLUDED.es_persona_juridica,
+                nombre_representante_legal=EXCLUDED.nombre_representante_legal,
+                fecha_registro=EXCLUDED.fecha_registro,
+                estado_activo = EXCLUDED.estado_activo
+                ";
+
+            //error_log($query, 3,"C:/xampp/htdocs/SERAMER-PLATFORM/var/log/error.log"); 
+            $result = pg_sqlconector($query);
+
+            if($result){
+                $obj['message'] = "Adjudicatario Creado con Exito...";
+            }
+            else{
+                $obj['message'] = "error!";
+            }
+
+            echo json_encode($obj);
+        }        
+
         if (isset($data['alertas_cumplimiento'])) {
             $obj = array('message' => null, 'alerta' => array());
 
@@ -155,6 +250,7 @@ if ($method == "POST") {
     }
 }
 
+//**********METODO DE LLAMADA GET */
 if ($method == "GET") {
     $petitions = "";
     if(isset($_GET['petitions'])){
@@ -193,6 +289,16 @@ if ($method == "GET") {
         $sql = "select tipo_queja from quejas";
         echo json_encode(pg_array_sqlconector($sql));
     }
+
+    if($petitions == 'tipoAlertas'){
+        $sql = "select * from cat_tipos_alerta order by id_tipo_alerta";
+        echo json_encode(pg_array_sqlconector($sql));
+    }    
+
+    if($petitions == 'listAdjudicatarios'){
+        $sql = "select * from adjudicatarios order by id_adjudicatario";
+        echo json_encode(pg_array_sqlconector($sql));
+    }    
 
     if($petitions == 'alertas_cumplimiento'){
         $obj = array();

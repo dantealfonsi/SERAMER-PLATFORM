@@ -48,6 +48,7 @@ function pg_sqlconector($consulta) {
         return $resultado; // Devuelve el objeto PDOStatement
     } catch (PDOException $e) {
         // Puedes loggear el error para depuración
+        error_log($e->getMessage(), 3,"C:/xampp/htdocs/SERAMER-PLATFORM/var/log/error.log"); 
         die("Error in query: " . $e->getMessage());
     }
 }
